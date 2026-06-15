@@ -64,7 +64,7 @@ sudo chmod 644 /etc/profile.d/99-mitmproxy.sh 2>/dev/null
 
 # --- ADD COMMANDS HERE (one per line) ---
 cat > /tmp/actionp-cmds.txt <<'CMDEOF'
-curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL"
+curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com"
 CMDEOF
 # ----------------------------------------
 
