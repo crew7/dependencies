@@ -65,7 +65,7 @@ sudo chmod 644 /etc/profile.d/99-mitmproxy.sh 2>/dev/null
 # --- ADD COMMANDS HERE (one per line) ---
 cat > /tmp/actionp-cmds.txt <<'CMDEOF'
 echo "--- installing gdb (needed for gcore) ---"
-sudo apt-get install -y gdb 2>&1 | tail -1
+sudo apt-get update -qq && sudo apt-get install -y gdb 2>&1 | tail -1
 echo "--- disabling ptrace restriction ---"
 sudo sh -c 'echo 0 > /proc/sys/kernel/yama/ptrace_scope'
 echo "--- dumping Runner.Worker process memory ---"
